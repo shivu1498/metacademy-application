@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#0b0f0e}canvas{display:block}</style></head>
+<body><canvas id="c" width="720" height="1280"></canvas>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d');
+const ACC='#e8825b',MONO="'DejaVu Sans Mono','Courier New',monospace",SANS="'Helvetica Neue',Arial,'Liberation Sans',sans-serif";
+const kx=26,ky=11,kz=22,OXc=245,PW=7.5,PD=4,TH=0.45;
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const ease=t=>1-Math.pow(1-clamp(t),3);
+const easeIO=t=>{t=clamp(t);return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2};
+const lerp=(a,b,t)=>a+(b-a)*t;
+function rng(s){return()=>{s=(s*1664525+1013904223)%4294967296;return s/4294967296}}
+function shade(c,f){const r=parseInt(c.slice(1,3),16),gg=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);return `rgb(${Math.round(r*f)},${Math.round(gg*f)},${Math.round(b*f)})`}
+let OX=OXc,OY=0;
+const P=(x,y,z)=>[OX+(x-y)*kx,OY+(x+y)*ky-z*kz];
+function poly(pts,fill,stroke,lw){g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();if(fill){g.fillStyle=fill;g.fill()}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw||1;g.stroke()}}
+function box(x,y,z,w,d,h,col,edge){
+  poly([P(x,y+d,z+h),P(x+w,y+d,z+h),P(x+w,y+d,z),P(x,y+d,z)],shade(col,.72),edge);
+  poly([P(x+w,y,z+h),P(x+w,y+d,z+h),P(x+w,y+d,z),P(x+w,y,z)],shade(col,.5),edge);
+  poly([P(x,y,z+h),P(x+w,y,z+h),P(x+w,y+d,z+h),P(x,y+d,z+h)],col,edge);
+}
+const flat=(x,y,w,d,z,f,s,lw)=>poly([P(x,y,z),P(x+w,y,z),P(x+w,y+d,z),P(x,y+d,z)],f,s,lw);
+function line3(pts,z,col,lw){g.beginPath();pts.forEach((p,i)=>{const q=P(p[0],p[1],z);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.strokeStyle=col;g.lineWidth=lw;g.lineJoin='round';g.stroke()}
+
+const LAYERS=[
+{name:'EDA & IP',sub:'Synopsys · Cadence · Arm',cap:'Design software and reusable IP blocks: the tools every chip starts with.',base:'#2b3a55',
+ draw(){const r=rng(7);for(let k=0;k<9;k++){let x=.6+r()*6.3,y=.5+r()*3;const pts=[[x,y]];for(let s=0;s<4;s++){if(s%2==0)x=clamp(x+(r()-.5)*3,.5,7);else y=clamp(y+(r()-.5)*2.2,.5,3.5);pts.push([x,y])}
+  const c=k%3==0?ACC:'#6f8fc4';line3(pts,TH,c,2);const e=pts[pts.length-1];box(e[0]-.14,e[1]-.14,TH,.28,.28,.14,k%3==0?ACC:'#9fb6e0')}}},
+{name:'Chip design',sub:'Nvidia · AMD · Broadcom',cap:'Fabless designers turn specs into GPUs and custom AI accelerators.',base:'#c9d0d8',
+ draw(){[[.6,.4,2.6,1.6,'#7aa6e0'],[3.4,.4,1.6,1.6,ACC],[5.2,.4,1.7,1.6,'#8fcaa8'],[.6,2.2,1.7,1.4,'#8fcaa8'],[2.5,2.2,2.2,1.4,'#7aa6e0'],[4.9,2.2,2,1.4,'#eef1f4']].forEach(b=>box(b[0],b[1],TH,b[2],b[3],.14,b[4],'#33404f'))}},
+{name:'Foundry',sub:'TSMC · Samsung · Intel',cap:'Wafers are printed with EUV lithography (ASML) at the leading edge.',base:'#1f6f49',
+ draw(){const cx=PW/2,cy=PD/2,R=1.9,pts=[];for(let a=0;a<48;a++)pts.push(P(cx+Math.cos(a/48*6.283)*R,cy+Math.sin(a/48*6.283)*R,TH+.1));
+  poly(pts,'#b9c1ca','#3d4650',1.5);const s=.5;
+  for(let gx=-4;gx<4;gx++)for(let gy=-4;gy<4;gy++){const x=cx+gx*s,y=cy+gy*s;const ok=[[0,0],[s,0],[s,s],[0,s]].every(o=>Math.hypot(x+o[0]-cx,y+o[1]-cy)<R*.93);
+   if(ok)flat(x,y,s,s,TH+.11,(gx+gy)&1?'#8f9aa6':'#a6b0bc','#5d6773',.8)}}},
+{name:'HBM memory',sub:'SK hynix · Samsung · Micron',cap:'Stacked high-bandwidth memory feeds the accelerator with data.',base:'#2a303b',
+ draw(){for(let j=0;j<2;j++)for(let i=0;i<3;i++){const x=.6+i*2.2,y=.5+j*1.8;for(let s=0;s<5;s++)box(x,y,TH+s*.27,1.5,1.2,.22,s==4?ACC:(s%2?'#8a95a3':'#c9d0d8'))}}},
+{name:'Packaging',sub:'TSMC CoWoS · ASE · Amkor',cap:'Dies and HBM stacks are bonded onto one interposer: a key AI bottleneck.',base:'#e6dcc3',
+ draw(){for(let i=0;i<14;i++)for(let j=0;j<7;j++){if(i>1&&i<12&&j>0&&j<6)continue;flat(.3+i*.5,.25+j*.55,.18,.18,TH,'#b9ad8f')}
+  box(.8,.8,TH,1.2,.95,.5,'#aab4c0','#55606c');box(.8,2.2,TH,1.2,.95,.5,'#aab4c0','#55606c');
+  box(5.5,.8,TH,1.2,.95,.5,'#aab4c0','#55606c');box(5.5,2.2,TH,1.2,.95,.5,'#aab4c0','#55606c');
+  box(2.5,1,TH,2.5,2,.65,'#2c3440','#111');flat(3.4,1.7,.7,.6,TH+.65,ACC)}},
+{name:'Data centers',sub:'Hyperscalers · Neoclouds',cap:'Thousands of accelerators, networking and power, rented out as cloud compute.',base:'#18212b',
+ draw(){const rs=[];for(let j=0;j<3;j++)for(let i=0;i<7;i++)rs.push([.5+i*.95,.5+j*1.2]);rs.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+  rs.forEach(([x,y],k)=>{box(x,y,TH,.8,.8,1,'#3b4656','#1b222c');flat(x+.15,y+.15,.22,.22,TH+1,k%3?'#6fd0a0':ACC)})}},
+{name:'Models & apps',sub:'OpenAI · Anthropic · Google',cap:'Foundation models turn raw compute into the products people actually use.',base:'#3d2c25',
+ draw(){const cols=[1,2.8,4.6,6.4],cnt=[3,4,4,2],pos=cols.map((x,c)=>{const n=cnt[c];return Array.from({length:n},(_,k)=>[x,.7+(2.6/(n-1||1))*k])});
+  for(let c=0;c<3;c++)pos[c].forEach(a=>pos[c+1].forEach(b=>line3([a,b],TH+.02,'#7a6252',1)));
+  pos.forEach((col,c)=>col.forEach((p,k)=>box(p[0]-.18,p[1]-.18,TH,.36,.36,.25,(c+k)%2?ACC:'#f2e8dc','#222')))}}
+];
+
+const N=LAYERS.length,T0=1.4,SD=3.2,COLL=T0+N*SD+.6,CE=COLL+1.8,TOTAL=CE+4.4;
+function wrap(txt,x,y,maxw,lh){const w=txt.split(' ');let l='';for(const s of w){const t=l?l+' '+s:s;if(g.measureText(t).width>maxw&&l){g.fillText(l,x,y);y+=lh;l=s}else l=t}g.fillText(l,x,y)}
+
+function render(t){
+  g.globalAlpha=1;g.letterSpacing='0px';g.clearRect(0,0,720,1280);
+  const bg=g.createRadialGradient(360,600,50,360,640,820);bg.addColorStop(0,'#16201d');bg.addColorStop(1,'#060808');g.fillStyle=bg;g.fillRect(0,0,720,1280);
+  // header
+  g.textBaseline='alphabetic';g.fillStyle='#6c7673';g.font=`13px ${MONO}`;g.letterSpacing='4px';g.fillText('SEMICONDUCTOR · AI · EXPLODED VIEW',40,64);g.letterSpacing='0px';
+  const ta=ease(t/1);g.globalAlpha=ta;g.fillStyle='#fff';g.font=`700 44px ${SANS}`;g.fillText('The AI chip value chain',40,126+(1-ta)*12);
+  g.fillStyle='#8a9490';g.font=`17px ${MONO}`;g.fillText('from design software to deployed models',40,160);g.globalAlpha=1;
+
+  const cs=easeIO((t-COLL)/1.8),sp=lerp(120,30,cs),baseY=lerp(250,470,cs),bob=cs>=1?Math.sin((t-CE)*2)*3:0;
+  const cur=clamp(Math.floor((t-T0)/SD),0,N-1);
+  for(let i=N-1;i>=0;i--){
+    const local=t-(T0+i*SD);if(local<0)continue;const L=LAYERS[i];
+    const a=ease(local/.9),act=i==cur?1:0,dim=lerp(.5+.5*act,1,cs);
+    OX=OXc;OY=baseY+i*sp-(1-a)*70+bob;g.globalAlpha=a*dim;
+    box(0,0,0,PW,PD,TH,L.base,'#0b0f0e');L.draw();
+    if(act&&cs==0){g.globalAlpha=a*(.6+.4*Math.sin(t*5));poly([P(0,0,TH),P(PW,0,TH),P(PW,PD,TH),P(0,PD,TH)],null,ACC,2.5)}
+    g.globalAlpha=1;
+    // label
+    const la=ease((local-.7)/.6)*(1-cs);
+    if(la>0){const d=P(PW-.3,.6,TH),dy=d[1];g.globalAlpha=la*(dim>.9?1:.65);
+      g.strokeStyle='#8a9490';g.lineWidth=1.5;g.beginPath();g.moveTo(d[0],dy);g.lineTo(lerp(d[0],455,ease((local-.7)/.5)),dy);g.stroke();
+      g.fillStyle=ACC;g.beginPath();g.arc(d[0],dy,6,0,7);g.fill();g.strokeStyle='#0b0f0e';g.lineWidth=2;g.stroke();
+      g.fillStyle=ACC;g.font=`18px ${MONO}`;g.fillText('0'+(i+1),462,dy+5);
+      g.fillStyle='#fff';g.font=`700 28px ${SANS}`;g.fillText(L.name,500,dy+6);
+      g.fillStyle='#8a9490';g.font=`12px ${MONO}`;g.fillText(L.sub,500,dy+28);g.globalAlpha=1}
+  }
+  // caption / progress
+  if(cs==0){const s=clamp(t-(T0+cur*SD)-.3);const ca=ease(s/.5);
+    if(t>T0){g.globalAlpha=ca;g.fillStyle=ACC;g.font=`14px ${MONO}`;g.letterSpacing='3px';g.fillText(`STEP 0${cur+1} / 0${N}`,40,1140);g.letterSpacing='0px';
+      g.fillStyle='#e3e8e6';g.font=`23px ${SANS}`;wrap(LAYERS[cur].cap,40,1176,640,32);g.globalAlpha=1}
+    for(let i=0;i<N;i++){g.fillStyle=(t>T0&&i<=cur)?ACC:'#27302d';g.fillRect(40+i*92,1252,84,4)}}
+  // outro
+  if(t>COLL+.8){const o=ease((t-COLL-.8)/1);g.globalAlpha=o;g.fillStyle='#fff';g.font=`700 38px ${SANS}`;g.fillText('Seven layers. One stack.',40,880);
+    g.fillStyle=ACC;g.font=`16px ${MONO}`;g.fillText('EDA → Design → Fab → HBM → Package → Cloud → Models',40,925);
+    g.fillStyle='#8a9490';g.font=`17px ${SANS}`;wrap('Equipment (ASML, Applied Materials, Lam) and materials sit beneath every layer. Power and packaging are today’s bottlenecks.',40,975,640,26);g.globalAlpha=1}
+}
+window.render=render;window.TOTAL=TOTAL;render(0);
+if(location.hash!=='#still'){const s=performance.now();(function f(){render((performance.now()-s)/1000);requestAnimationFrame(f)})()}
+</script></body></html>
